@@ -9,14 +9,19 @@ var Mta = require('mta-gtfs');
 var request = require('request');
 var csvParse = require('csv-parse');
 var file = fs.readFileSync(path.join(__dirname, './node_modules/mta-gtfs/lib/data/gtfs/stops.txt'));
+var stops = {};
+
 csvParse(file, {
   columns: true,
   objname: 'stop_id'
 }, function (err, data) {
-  run(data);
+  stops = data;
+  // getTrainLines((rv)=>console.log(rv.join('\n')));
 });
 
-function run(stops) {
+function getTrainLines(success) {
+  var rv = [];
+
   var requestSettings = {
     method: 'GET',
     url: `http://datamine.mta.info/mta_esi.php?key=${process.env.MTA_API_KEY}&feed_id=16`,
@@ -35,32 +40,36 @@ function run(stops) {
         }
         return true;
       })
-      console.log(trains.length);
+      rv.push(trains.length);
       trains.forEach(function(entity) {
-        // console.log(entity.trip_update.trip);
-        console.log('🚂', entity.trip_update.trip.route_id, entity.id)
+        rv.push(`🚂  ${entity.trip_update.trip.route_id} ${entity.id}`);
         entity.trip_update.stop_time_update //.splice(0, 3)
         .forEach(function(update) {
           // console.log(entity.trip_update.stop_time_update);
           if (update.stop_id === 'Q05S' && stops[update.stop_id]) {
-            console.log(
+            rv.push([
               update.stop_id,
               stops[update.stop_id].stop_name,
               (new Date(update.arrival.time.low*1000)).toLocaleTimeString()
-            );
+            ].join(' '));
+
           };
         })
       });
+      success(rv);
     };
   });
 }
 
 
 app.set('port', (process.env.PORT || 5000))
-app.use(express.static(__dirname + '/public'))
+// app.use(express.static(__dirname + '/public'))
 
 app.get('/', function(request, response) {
-  response.send('Hello World!')
+
+  getTrainLines((rv)=>
+    response.send(rv.join('<br/>'))
+  );
 })
 
 app.listen(app.get('port'), function() {
