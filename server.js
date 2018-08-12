@@ -50,7 +50,7 @@ function getTrainLines(success) {
             rv.push([
               update.stop_id,
               stops[update.stop_id].stop_name,
-              (new Date(update.arrival.time.low*1000)).toLocaleTimeString()
+              `<script>document.write((new Date(${update.arrival.time.low*1000})).toLocaleTimeString())</script>`
             ].join(' '));
 
           };
