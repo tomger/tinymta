@@ -2,6 +2,9 @@
 var path = require('path');
 var fs = require('fs');
 
+var express = require('express')
+var app = express()
+
 var GtfsRealtimeBindings = require('gtfs-realtime-bindings');
 var Mta = require('mta-gtfs');
 var request = require('request');
@@ -18,7 +21,7 @@ csvParse(file, {
 function run(stops) {
   var requestSettings = {
     method: 'GET',
-    url: 'http://datamine.mta.info/mta_esi.php?key=X&feed_id=16',
+    url: `http://datamine.mta.info/mta_esi.php?key=${process.env.MTA_API_KEY}&feed_id=16`,
     encoding: null
   };
   request(requestSettings, function (error, response, body) {
@@ -53,3 +56,15 @@ function run(stops) {
     };
   });
 }
+
+
+app.set('port', (process.env.PORT || 5000))
+app.use(express.static(__dirname + '/public'))
+
+app.get('/', function(request, response) {
+  response.send('Hello World!')
+})
+
+app.listen(app.get('port'), function() {
+  console.log("Node app is running at localhost:" + app.get('port'))
+})
