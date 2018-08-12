@@ -1,0 +1,55 @@
+
+var path = require('path');
+var fs = require('fs');
+
+var GtfsRealtimeBindings = require('gtfs-realtime-bindings');
+var Mta = require('mta-gtfs');
+var request = require('request');
+var csvParse = require('csv-parse');
+var file = fs.readFileSync(path.join(__dirname, './node_modules/mta-gtfs/lib/data/gtfs/stops.txt'));
+var stops =
+csvParse(file, {
+  columns: true,
+  objname: 'stop_id'
+}, function (err, data) {
+  run(data);
+});
+
+function run(stops) {
+  var requestSettings = {
+    method: 'GET',
+    url: 'http://datamine.mta.info/mta_esi.php?key=X&feed_id=16',
+    encoding: null
+  };
+  request(requestSettings, function (error, response, body) {
+    if (!error && response.statusCode == 200) {
+      var feed = GtfsRealtimeBindings.FeedMessage.decode(body);
+      var trains = feed.entity
+      .filter(function(entity) {
+        if (!entity.trip_update) {
+          return false;
+        }
+        if (entity.trip_update.trip.route_id !== 'Q') {
+          return false;
+        }
+        return true;
+      })
+      console.log(trains.length);
+      trains.forEach(function(entity) {
+        // console.log(entity.trip_update.trip);
+        console.log('🚂', entity.trip_update.trip.route_id, entity.id)
+        entity.trip_update.stop_time_update //.splice(0, 3)
+        .forEach(function(update) {
+          // console.log(entity.trip_update.stop_time_update);
+          if (update.stop_id === 'Q05S' && stops[update.stop_id]) {
+            console.log(
+              update.stop_id,
+              stops[update.stop_id].stop_name,
+              (new Date(update.arrival.time.low*1000)).toLocaleTimeString()
+            );
+          };
+        })
+      });
+    };
+  });
+}
