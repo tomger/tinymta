@@ -4,13 +4,11 @@ var fs = require('fs');
 
 var express = require('express')
 var app = express()
-
 var GtfsRealtimeBindings = require('gtfs-realtime-bindings');
 var Mta = require('mta-gtfs');
 var request = require('request');
 var csvParse = require('csv-parse');
 var file = fs.readFileSync(path.join(__dirname, './node_modules/mta-gtfs/lib/data/gtfs/stops.txt'));
-var stops =
 csvParse(file, {
   columns: true,
   objname: 'stop_id'

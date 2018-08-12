@@ -2,7 +2,7 @@
   "name": "mta",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -10,7 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "csv-parse": "^2.5.0",
-    "google-protobuf": "^3.6.1",
+    "express": "^4.16.3",
     "gtfs-realtime-bindings": "0.0.4",
     "mta-gtfs": "^1.1.0",
     "request": "^2.88.0"
