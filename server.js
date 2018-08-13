@@ -19,36 +19,35 @@ csvParse(file, {
   // getTrainLines((rv)=>console.log(rv.join('\n')));
 });
 
-function getTrainLines(success) {
-  var rv = [];
-  // 16
+function getUpcomingTrainsFor(station) {
+  return new Promise(function(resolve, reject) {
+    var rv = [];
+    // 16
 
-  var requestSettings = {
-    method: 'GET',
-    url: `http://datamine.mta.info/mta_esi.php?key=${process.env.MTA_API_KEY}&feed_id=1`,
-    encoding: null
-  };
-  request(requestSettings, function (error, response, body) {
-    if (!error && response.statusCode == 200) {
+    var requestSettings = {
+      method: 'GET',
+      url: `http://datamine.mta.info/mta_esi.php?key=${process.env.MTA_API_KEY}&feed_id=1`,
+      encoding: null
+    };
+    request(requestSettings, function (error, response, body) {
+      if (error || response.statusCode !== 200 || body.length < 30) {
+        return reject(rv);
+      }
       var feed = GtfsRealtimeBindings.FeedMessage.decode(body);
       var trains = feed.entity
       .filter(function(entity) {
         if (!entity.trip_update) {
           return false;
         }
-        // if (entity.trip_update.trip.route_id !== 'Q') {
-        //   return false;
-        // }
         return true;
       })
-      rv.push(trains.length);
       trains.forEach(function(entity) {
         entity.trip_update.stop_time_update //.splice(0, 3)
         .filter(update => {
           return stops[update.stop_id] && update.arrival;
         })
         .filter(update => {
-          return update.stop_id === '236N'
+          return update.stop_id === station
         })
         .forEach(function(update) {
           // console.log(entity.trip_update.stop_time_update);
@@ -60,9 +59,41 @@ function getTrainLines(success) {
           });
         })
       });
-      success(rv);
-    };
+      resolve(rv);
+    });
   });
+}
+
+function renderStops(stopId, trains) {
+  trains.sort((a, b) => {
+    return a.time - b.time;
+  })
+  let page = `
+  <style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif;}
+  .train-pill {
+    display: inline-block;
+    box-shadow: 0 1px 1px 0px #ddd;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .train-route {
+    width: 20px;
+    display: inline-block;
+    text-align: center;
+    background: red;
+    color: #fff;
+  }
+  </style>
+  `;
+  return page + `<h3>${stops[stopId].stop_name}</h3>` + trains.splice(0, 4).map(train => {
+    return `
+      <div class="train-pill">
+        <span class="train-route">${train.route}</span>
+        <span class="train-time"><script>document.write((new Date(${train.time})).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}))</script></span>
+      </div>
+    `
+  }).join('')
 }
 
 
@@ -70,13 +101,11 @@ app.set('port', (process.env.PORT || 5000))
 // app.use(express.static(__dirname + '/public'))
 
 app.get('/', function(request, response) {
-  getTrainLines((rv)=> {
-    rv.sort((a, b) => {
-      return a.time - b.time;
-    })
-    response.send(rv.map(train => {
-      return `🚂 ${train.route} <script>document.write((new Date(${train.time})).toLocaleTimeString())</script>`
-    }).join('<br/>'))
+  Promise.all([
+    getUpcomingTrainsFor('130S').then((rv) => response.write(renderStops('130S', rv))),
+    getUpcomingTrainsFor('236N').then((rv) => response.write(renderStops('236N', rv))),
+  ]).then(() => {
+    response.end();
   });
 })
 
