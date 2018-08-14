@@ -19,14 +19,11 @@ csvParse(file, {
   // getTrainLines((rv)=>console.log(rv.join('\n')));
 });
 
-function getUpcomingTrainsFor(station) {
+function getGtfsFeed(id) {
   return new Promise(function(resolve, reject) {
-    var rv = [];
-    // 16
-
     var requestSettings = {
       method: 'GET',
-      url: `http://datamine.mta.info/mta_esi.php?key=${process.env.MTA_API_KEY}&feed_id=1`,
+      url: `http://datamine.mta.info/mta_esi.php?key=${process.env.MTA_API_KEY}&feed_id=${id}`,
       encoding: null
     };
     request(requestSettings, function (error, response, body) {
@@ -34,41 +31,65 @@ function getUpcomingTrainsFor(station) {
         return reject(rv);
       }
       var feed = GtfsRealtimeBindings.FeedMessage.decode(body);
-      var trains = feed.entity
-      .filter(function(entity) {
-        if (!entity.trip_update) {
-          return false;
-        }
-        return true;
-      })
-      trains.forEach(function(entity) {
-        entity.trip_update.stop_time_update //.splice(0, 3)
-        .filter(update => {
-          return stops[update.stop_id] && update.arrival;
-        })
-        .filter(update => {
-          return update.stop_id === station
-        })
-        .forEach(function(update) {
-          // console.log(entity.trip_update.stop_time_update);
-          rv.push({
-            route: entity.trip_update.trip.route_id,
-            stop_id: update.stop_id,
-            stop: stops[update.stop_id].stop_name,
-            time: update.arrival.time.low*1000
-          });
-        })
-      });
-      resolve(rv);
+      resolve(feed);
     });
   });
 }
 
-function renderStops(stopId, trains) {
+function getUpcomingTrainsFor(feed, station) {
+  return new Promise(function(resolve, reject) {
+    var rv = [];
+    var trains = feed.entity
+    .filter(function(entity) {
+      if (!entity.trip_update) {
+        return false;
+      }
+      return true;
+    })
+    trains.forEach(function(entity) {
+      entity.trip_update.stop_time_update //.splice(0, 3)
+      .filter(update => {
+        return stops[update.stop_id] && update.arrival;
+      })
+      .filter(update => {
+        return update.stop_id === station
+      })
+      .forEach(function(update) {
+        // console.log(entity.trip_update.stop_time_update);
+        rv.push({
+          route: entity.trip_update.trip.route_id,
+          stop_id: update.stop_id,
+          stop_name: stops[update.stop_id].stop_name,
+          time: update.arrival.time.low*1000
+        });
+      })
+    });
+    resolve(rv);
+  });
+}
+
+function renderStops(trains) {
   trains.sort((a, b) => {
     return a.time - b.time;
   })
+  return `<h3>${trains && trains[0].stop_name} (${trains[0].stop_id})</h3>` + trains.splice(0, 4).map(train => {
+    return `
+      <div class="train-pill">
+        <span class="train-route">${train.route}</span>
+        <span class="train-time"><script>document.write((new Date(${train.time})).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}))</script></span>
+      </div>
+    `
+  }).join('')
+}
+
+
+app.set('port', (process.env.PORT || 5000))
+// app.use(express.static(__dirname + '/public'))
+
+app.get('/', function(request, response) {
   let page = `
+  <!DOCTYPE html>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <style>
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif;}
   .train-pill {
@@ -85,25 +106,20 @@ function renderStops(stopId, trains) {
     color: #fff;
   }
   </style>
+  <h1>Realtime trains</h1>
   `;
-  return page + `<h3>${stops[stopId].stop_name}</h3>` + trains.splice(0, 4).map(train => {
-    return `
-      <div class="train-pill">
-        <span class="train-route">${train.route}</span>
-        <span class="train-time"><script>document.write((new Date(${train.time})).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}))</script></span>
-      </div>
-    `
-  }).join('')
-}
-
-
-app.set('port', (process.env.PORT || 5000))
-// app.use(express.static(__dirname + '/public'))
-
-app.get('/', function(request, response) {
+  response.write(page);
   Promise.all([
-    getUpcomingTrainsFor('130S').then((rv) => response.write(renderStops('130S', rv))),
-    getUpcomingTrainsFor('236N').then((rv) => response.write(renderStops('236N', rv))),
+    getGtfsFeed(1).then((feed) => {
+      getUpcomingTrainsFor(feed, '130S').then((rv) => response.write(renderStops(rv)))
+    }),
+    getGtfsFeed(1).then((feed) => {
+      getUpcomingTrainsFor(feed, '236N').then((rv) => response.write(renderStops(rv)))
+    }),
+    getGtfsFeed(16).then((feed) => {
+      getUpcomingTrainsFor(feed, 'Q05S').then((rv) => response.write(renderStops(rv)))
+    }),
+
   ]).then(() => {
     response.end();
   });
