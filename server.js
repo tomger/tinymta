@@ -10,6 +10,7 @@ var request = require('request');
 var csvParse = require('csv-parse');
 var file = fs.readFileSync(path.join(__dirname, './node_modules/mta-gtfs/lib/data/gtfs/stops.txt'));
 var stops = {};
+var cache = {};
 
 csvParse(file, {
   columns: true,
@@ -21,6 +22,10 @@ csvParse(file, {
 
 function getGtfsFeed(id) {
   return new Promise(function(resolve, reject) {
+    if (cache[id] && cache[id].header.timestamp.low * 1000 > (Date.now() - 30 * 1000)) {
+      resolve(cache[id]);
+      return;
+    }
     var requestSettings = {
       method: 'GET',
       url: `http://datamine.mta.info/mta_esi.php?key=${process.env.MTA_API_KEY}&feed_id=${id}`,
@@ -31,6 +36,8 @@ function getGtfsFeed(id) {
         return reject(rv);
       }
       var feed = GtfsRealtimeBindings.FeedMessage.decode(body);
+      // feed.header.gtfs_realtime_version
+      cache[id] = feed;
       resolve(feed);
     });
   });
@@ -72,7 +79,7 @@ function renderStops(trains) {
   trains.sort((a, b) => {
     return a.time - b.time;
   })
-  return `<h3>${trains && trains[0].stop_name} (${trains[0].stop_id})</h3>` + trains.splice(0, 4).map(train => {
+  return `<h3>${trains && trains[0].stop_name} (${trains[0].stop_id})</h3>` + trains.splice(0, 3).map(train => {
     return `
       <div class="train-pill">
         <span class="train-route">${train.route}</span>
@@ -91,29 +98,44 @@ app.get('/', function(request, response) {
   <!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif;}
+  body { margin: 0; padding: 0;background: #f7f7f7; font-family: -apple-system, BlinkMacSystemFont, sans-serif;}
+  h1 {
+    margin: 0;
+    text-align: center;
+    border-bottom: 1px solid #ccc;
+    background: #fff;
+    font-size: 16px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+  }
   .train-pill {
     display: inline-block;
+    background: #fff;
     box-shadow: 0 1px 1px 0px #ddd;
     border-radius: 3px;
     overflow: hidden;
+  }
+  .train-time {
+    padding: 3px;
   }
   .train-route {
     width: 20px;
     display: inline-block;
     text-align: center;
-    background: red;
+    background: #555;
     color: #fff;
   }
   </style>
   <h1>Realtime trains</h1>
+  <div style="padding: 20px;">
   `;
   response.write(page);
   Promise.all([
     getGtfsFeed(1).then((feed) => {
       getUpcomingTrainsFor(feed, '130S').then((rv) => response.write(renderStops(rv)))
-    }),
-    getGtfsFeed(1).then((feed) => {
       getUpcomingTrainsFor(feed, '236N').then((rv) => response.write(renderStops(rv)))
     }),
     getGtfsFeed(16).then((feed) => {
