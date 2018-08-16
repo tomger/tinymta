@@ -20,9 +20,43 @@ csvParse(file, {
   // getTrainLines((rv)=>console.log(rv.join('\n')));
 });
 
+function distance(lat1, lon1, lat2, lon2) {
+	var radlat1 = Math.PI * lat1/180
+	var radlat2 = Math.PI * lat2/180
+	var theta = lon1-lon2
+	var radtheta = Math.PI * theta/180
+	var dist = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
+	if (dist > 1) {
+		dist = 1;
+	}
+	dist = Math.acos(dist)
+	dist = dist * 180/Math.PI;
+	dist = dist * 60 * 1.1515;
+  dist = dist * 0.8684;
+	// if (unit=="K") { dist = dist * 1.609344 }
+	return dist
+}
+
+function getStopsByDistance(latitude, longitude) {
+  let rv = [];
+  for (let stop_id in stops) {
+    let stop = stops[stop_id];
+    if (stop_id.indexOf('N') !== -1 || stop_id.indexOf('S') !== -1) {
+      continue;
+    }
+    rv.push(stop);
+    stop.distance = distance(stop.stop_lat, stop.stop_lon, latitude, longitude);
+  }
+  rv.sort((a, b) => {
+    return a.distance - b.distance;
+  });
+  return rv;
+}
+
 function getGtfsFeed(id) {
   return new Promise(function(resolve, reject) {
     if (cache[id] && cache[id].header.timestamp.low * 1000 > (Date.now() - 30 * 1000)) {
+      console.log('cache');
       resolve(cache[id]);
       return;
     }
@@ -32,13 +66,21 @@ function getGtfsFeed(id) {
       encoding: null
     };
     request(requestSettings, function (error, response, body) {
+      console.log('fresh data for', id);
       if (error || response.statusCode !== 200 || body.length < 30) {
-        return reject(rv);
+        reject(error);
+        return;
       }
-      var feed = GtfsRealtimeBindings.FeedMessage.decode(body);
-      // feed.header.gtfs_realtime_version
-      cache[id] = feed;
-      resolve(feed);
+      try {
+        var feed = GtfsRealtimeBindings.FeedMessage.decode(body);
+        // feed.header.gtfs_realtime_version
+        cache[id] = feed;
+        resolve(feed);
+      } catch (e) {
+        console.error(e);
+        reject(e);
+        return
+      }
     });
   });
 }
@@ -133,16 +175,77 @@ app.get('/', function(request, response) {
   <div style="padding: 20px;">
   `;
   response.write(page);
-  Promise.all([
-    getGtfsFeed(1).then((feed) => {
-      getUpcomingTrainsFor(feed, '130S').then((rv) => response.write(renderStops(rv)))
-      getUpcomingTrainsFor(feed, '236N').then((rv) => response.write(renderStops(rv)))
-    }),
-    getGtfsFeed(16).then((feed) => {
-      getUpcomingTrainsFor(feed, 'Q05S').then((rv) => response.write(renderStops(rv)))
-    }),
 
-  ]).then(() => {
+  let requestLocationHtml = `
+  <script>
+  var options = {
+    enableHighAccuracy: true,
+    timeout: 5000,
+    maximumAge: 0
+  };
+
+  function success(pos) {
+    var crd = pos.coords;
+    console.log('Your current position is:', crd, pos);
+    window.location = '?latitude=' + crd.latitude + '&longitude=' + crd.longitude;
+  }
+
+  function error(err) {
+    console.warn(err);
+  }
+
+  navigator.geolocation.getCurrentPosition(success, error, options);
+  </script>
+
+  `;
+
+  let myStops = [];
+  if (!request.query.latitude) {
+    response.write(requestLocationHtml);
+  } else {
+    myStops = getStopsByDistance(
+      parseFloat(request.query.latitude),
+      parseFloat(request.query.longitude)
+    );
+    // console.log(stops.splice(0, 4));
+  }
+
+  let feedMap = {
+    '1' : ['1', '2', '3', '4', '5', '6'],
+    '26': ['A', 'C', 'E', 'H'],
+    '16': ['N', 'Q', 'R', 'W'],
+    '21': ['B', 'D', 'F', 'M'],
+    '2' : ['L'],
+    '31': ['G'],
+    '36': ['J', 'Z'],
+    '51': ['7']
+  };
+
+  let promises = [];
+  for (let feedId in feedMap) {
+    promises.push(getGtfsFeed(feedId).then(() => {
+      console.log(feedId, 'done');
+    }));
+  }
+  Promise.all(promises
+  //   [
+  //
+  //   getGtfsFeed(1).then((feed) => {
+  //     getUpcomingTrainsFor(feed, '130S').then((rv) => response.write(renderStops(rv)))
+  //     getUpcomingTrainsFor(feed, '236N').then((rv) => response.write(renderStops(rv)))
+  //   }),
+  //   getGtfsFeed(16).then((feed) => {
+  //     getUpcomingTrainsFor(feed, 'Q05S').then((rv) => response.write(renderStops(rv)))
+  //   }),
+  //
+  // ]
+  ).then(() => {
+    response.write(myStops.splice(0, 4).map(stop => {return stop.stop_name}).join(', '))
+  })
+  .catch(err => {
+    console.log(err);
+  })
+  .finally(_ => {
     response.end();
   });
 })
