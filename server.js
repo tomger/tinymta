@@ -241,13 +241,13 @@ app.get('/', function(request, response) {
   // ]
   ).then(() => {
     response.write(myStops.splice(0, 4).map(stop => {return stop.stop_name}).join(', '))
+    response.end();
   })
   .catch(err => {
     console.log(err);
   })
-  .finally(_ => {
-    response.end();
-  });
+  // .finally(_ => {
+  // });
 })
 
 app.listen(app.get('port'), function() {
