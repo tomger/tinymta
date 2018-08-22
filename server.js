@@ -41,11 +41,10 @@ function getStopsByDistance(latitude, longitude) {
   let rv = [];
   for (let stop_id in stops) {
     let stop = stops[stop_id];
-    if (stop_id.indexOf('N') !== -1 || stop_id.indexOf('S') !== -1) {
-      continue;
-    }
-    rv.push(stop);
     stop.distance = distance(stop.stop_lat, stop.stop_lon, latitude, longitude);
+    if (/*stop.location_type == 1 && */stop.distance < .6) {
+      rv.push(stop);
+    }
   }
   rv.sort((a, b) => {
     return a.distance - b.distance;
@@ -77,8 +76,9 @@ function getGtfsFeed(id) {
         cache[id] = feed;
         resolve(feed);
       } catch (e) {
-        console.error(e);
-        reject(e);
+        console.error('Decode error',e);
+        // reject(e);
+        resolve({})
         return
       }
     });
@@ -176,39 +176,45 @@ app.get('/', function(request, response) {
   `;
   response.write(page);
 
-  let requestLocationHtml = `
-  <script>
-  var options = {
-    enableHighAccuracy: true,
-    timeout: 5000,
-    maximumAge: 0
+  // let requestLocationHtml = `
+  // <script>
+  // var options = {
+  //   enableHighAccuracy: true,
+  //   timeout: 5000,
+  //   maximumAge: 0
+  // };
+  //
+  // function success(pos) {
+  //   var crd = pos.coords;
+  //   console.log('Your current position is:', crd, pos);
+  //   window.location = '?latitude=' + crd.latitude + '&longitude=' + crd.longitude;
+  // }
+  //
+  // function error(err) {
+  //   console.warn(err);
+  // }
+  // function getLocation() {
+  //   navigator.geolocation.getCurrentPosition(success, error, options);
+  // }
+  // </script>
+  // <a href="#" onclick="getLocation()">Get my location</a>
+  // `;
+
+  // let myStops = [];
+  // if (!request.query.latitude) {
+  //   response.write(requestLocationHtml);
+  // } else {
+  //
+  let location = {
+    latitude: 40.6746823,
+    longitude: -73.9744451
   };
-
-  function success(pos) {
-    var crd = pos.coords;
-    console.log('Your current position is:', crd, pos);
-    window.location = '?latitude=' + crd.latitude + '&longitude=' + crd.longitude;
-  }
-
-  function error(err) {
-    console.warn(err);
-  }
-
-  navigator.geolocation.getCurrentPosition(success, error, options);
-  </script>
-
-  `;
-
-  let myStops = [];
-  if (!request.query.latitude) {
-    response.write(requestLocationHtml);
-  } else {
-    myStops = getStopsByDistance(
-      parseFloat(request.query.latitude),
-      parseFloat(request.query.longitude)
-    );
+  myStops = getStopsByDistance(
+    parseFloat(location.latitude),
+    parseFloat(location.longitude)
+  );
     // console.log(stops.splice(0, 4));
-  }
+  // }
 
   let feedMap = {
     '1' : ['1', '2', '3', '4', '5', '6'],
@@ -221,27 +227,37 @@ app.get('/', function(request, response) {
     '51': ['7']
   };
 
+  let feedIds = new Set();
+  myStops.forEach(stop => {
+    for (let feedId in feedMap) {
+      if (feedMap[feedId].indexOf(stop.stop_id[0]) !== -1) {
+        stop.feed_id = feedId;
+        feedIds.add(feedId);
+      }
+    }
+
+  })
   let promises = [];
-  for (let feedId in feedMap) {
+  console.log(feedIds);
+  for (let [feedId, _] of feedIds.entries()) {
     promises.push(getGtfsFeed(feedId).then(() => {
       console.log(feedId, 'done');
     }));
   }
-  Promise.all(promises
-  //   [
-  //
-  //   getGtfsFeed(1).then((feed) => {
-  //     getUpcomingTrainsFor(feed, '130S').then((rv) => response.write(renderStops(rv)))
-  //     getUpcomingTrainsFor(feed, '236N').then((rv) => response.write(renderStops(rv)))
-  //   }),
-  //   getGtfsFeed(16).then((feed) => {
-  //     getUpcomingTrainsFor(feed, 'Q05S').then((rv) => response.write(renderStops(rv)))
-  //   }),
-  //
-  // ]
-  ).then(() => {
-    response.write(myStops.splice(0, 4).map(stop => {return stop.stop_name}).join(', '))
-    response.end();
+  Promise.all(promises).then(() => {
+    // console.log(cache);
+    console.log('all done');
+    myStops.forEach(stop => {
+      let feed = cache[stop.feed_id]; /// EUEUHH
+      console.log(stop.feed_id, !!feed);
+      if (!feed || !feed.entity) {
+        return;
+      }
+
+      console.log(feed, stop.stop_id);
+      getUpcomingTrainsFor(feed, stop.stop_id).then((rv) => response.write(renderStops(rv)))
+    });
+    // response.end();
   })
   .catch(err => {
     console.log(err);
