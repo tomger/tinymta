@@ -124,14 +124,14 @@ function renderStops(trains) {
   trains.sort((a, b) => {
     return a.time - b.time;
   })
-  return `<h3>${trains && trains[0].stop_name} (${trains[0].stop_id})</h3>` + trains.splice(0, 3).map(train => {
+  return `<div class="train"><div class="train-station">${trains && trains[0].stop_name} (${trains[0].stop_id})</div>` + trains.splice(0, 3).map(train => {
     return `
       <div class="train-pill">
         <span class="train-route">${train.route}</span>
         <span class="train-time"><script>document.write((new Date(${train.time})).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}))</script></span>
       </div>
     `
-  }).join('')
+  }).join('') + `</div>`
 }
 
 
@@ -145,7 +145,7 @@ app.get('/', function(request, response) {
   <style>
   body { margin: 0; padding: 0;background: #f7f7f7; font-family: -apple-system, BlinkMacSystemFont, sans-serif;}
   h1 {
-    margin: 0;
+    margin: 0 0 5px 0;
     text-align: center;
     border-bottom: 1px solid #ccc;
     background: #fff;
@@ -156,7 +156,18 @@ app.get('/', function(request, response) {
     justify-content: center;
     font-weight: 500;
   }
+  .train {
+    padding: 16px 20px;
+    border-bottom: 1px solid #ccc;
+    background: #fff;
+  }
+  .train-station {
+    font-size: 16px;
+    font-weight: 400;
+    margin-bottom: 4px;
+  }
   .train-pill {
+    font-size: 14px;
     display: inline-block;
     background: #fff;
     box-shadow: 0 1px 1px 0px #ddd;
@@ -175,7 +186,7 @@ app.get('/', function(request, response) {
   }
   </style>
   <h1>Realtime trains</h1>
-  <div style="padding: 20px;">
+  <div style="margin: 8px; border-radius: 3px; overflow: hidden; box-shadow: 0 0 1px #ddd;">
   `;
   response.write(page);
 
