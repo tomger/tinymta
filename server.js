@@ -176,45 +176,46 @@ app.get('/', function(request, response) {
   `;
   response.write(page);
 
-  // let requestLocationHtml = `
-  // <script>
-  // var options = {
-  //   enableHighAccuracy: true,
-  //   timeout: 5000,
-  //   maximumAge: 0
-  // };
-  //
-  // function success(pos) {
-  //   var crd = pos.coords;
-  //   console.log('Your current position is:', crd, pos);
-  //   window.location = '?latitude=' + crd.latitude + '&longitude=' + crd.longitude;
-  // }
-  //
-  // function error(err) {
-  //   console.warn(err);
-  // }
-  // function getLocation() {
-  //   navigator.geolocation.getCurrentPosition(success, error, options);
-  // }
-  // </script>
-  // <a href="#" onclick="getLocation()">Get my location</a>
-  // `;
-
-  // let myStops = [];
-  // if (!request.query.latitude) {
-  //   response.write(requestLocationHtml);
-  // } else {
-  //
-  let location = {
-    latitude: 40.6746823,
-    longitude: -73.9744451
+  let requestLocationHtml = `
+  <script>
+  var options = {
+    enableHighAccuracy: true,
+    timeout: 5000,
+    maximumAge: 0
   };
-  myStops = getStopsByDistance(
-    parseFloat(location.latitude),
-    parseFloat(location.longitude)
-  );
-    // console.log(stops.splice(0, 4));
-  // }
+
+  function success(pos) {
+    var crd = pos.coords;
+    console.log('Your current position is:', crd, pos);
+    window.location = '?latitude=' + crd.latitude + '&longitude=' + crd.longitude;
+  }
+
+  function error(err) {
+    console.warn(err);
+  }
+  function getLocation() {
+    navigator.geolocation.getCurrentPosition(success, error, options);
+  }
+  </script>
+  <a href="#" onclick="getLocation()">Get my location</a>
+  `;
+
+  let myStops = [];
+  if (!request.query.latitude) {
+    response.write(requestLocationHtml);
+  } else {
+
+    // let location = {
+    //   latitude: 40.6746823,
+    //   longitude: -73.9744451
+    // };
+    let location = request.query;
+    myStops = getStopsByDistance(
+      parseFloat(location.latitude),
+      parseFloat(location.longitude)
+    );
+    console.log(myStops.splice(0, 4));
+  }
 
   let feedMap = {
     '1' : ['1', '2', '3', '4', '5', '6'],
