@@ -118,6 +118,9 @@ function getUpcomingTrainsFor(feed, station) {
 }
 
 function renderStops(trains) {
+  if (trains.length === 0) {
+    return ""
+  }
   trains.sort((a, b) => {
     return a.time - b.time;
   })
@@ -248,17 +251,26 @@ app.get('/', function(request, response) {
   Promise.all(promises).then(() => {
     // console.log(cache);
     console.log('all done');
-    myStops.forEach(stop => {
+    Promise.all(myStops.map(stop => {
       let feed = cache[stop.feed_id]; /// EUEUHH
-      console.log(stop.feed_id, !!feed);
+      // console.log(stop.feed_id, !!feed);
       if (!feed || !feed.entity) {
         return;
       }
 
-      console.log(feed, stop.stop_id);
-      getUpcomingTrainsFor(feed, stop.stop_id).then((rv) => response.write(renderStops(rv)))
+      // console.log(feed, stop.stop_id);
+      return getUpcomingTrainsFor(feed, stop.stop_id)
+    })).then(rv => {
+
+      let html = rv.map(stops => {
+        // console.log(stops,  'x');
+        return renderStops(stops)
+      }).join('');
+      // .then((rv) => renderStops(rv)))
+      // console.log('what?', stops);
+      response.end(html);
+      console.log(html);
     });
-    // response.end();
   })
   .catch(err => {
     console.log(err);
