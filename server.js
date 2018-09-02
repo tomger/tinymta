@@ -42,7 +42,7 @@ function getStopsByDistance(latitude, longitude) {
   for (let stop_id in stops) {
     let stop = stops[stop_id];
     stop.distance = distance(stop.stop_lat, stop.stop_lon, latitude, longitude);
-    if (/*stop.location_type == 1 && */stop.distance < .6) {
+    if (/*stop.location_type == 1 && */stop.distance < .5) {
       rv.push(stop);
     }
   }
@@ -66,8 +66,12 @@ function getGtfsFeed(id) {
     };
     request(requestSettings, function (error, response, body) {
       console.log('fresh data for', id);
-      if (error || response.statusCode !== 200 || body.length < 30) {
+      if (error || response.statusCode !== 200 ) {
         reject(error);
+        return
+      }
+      if (body.length < 30) {
+        reject('Error: probably not authenticated or rate limited.');
         return;
       }
       try {
@@ -79,7 +83,6 @@ function getGtfsFeed(id) {
         console.error('Decode error',e);
         // reject(e);
         resolve({})
-        return
       }
     });
   });
@@ -118,7 +121,7 @@ function getUpcomingTrainsFor(feed, station) {
 }
 
 function renderStops(trains) {
-  if (trains.length === 0) {
+  if (!trains || trains.length === 0) {
     return ""
   }
   trains.sort((a, b) => {
@@ -228,7 +231,7 @@ app.get('/', function(request, response) {
       parseFloat(location.latitude),
       parseFloat(location.longitude)
     );
-    console.log(myStops.splice(0, 4));
+    // console.log('My stops', myStops.splice(0, 4));
   }
 
   let feedMap = {
@@ -253,38 +256,36 @@ app.get('/', function(request, response) {
 
   })
   let promises = [];
-  console.log(feedIds);
+  console.log('feedid', feedIds);
   for (let [feedId, _] of feedIds.entries()) {
     promises.push(getGtfsFeed(feedId).then(() => {
       console.log(feedId, 'done');
     }));
   }
   Promise.all(promises).then(() => {
-    // console.log(cache);
-    console.log('all done');
     Promise.all(myStops.map(stop => {
       let feed = cache[stop.feed_id]; /// EUEUHH
       // console.log(stop.feed_id, !!feed);
       if (!feed || !feed.entity) {
         return;
       }
-
-      // console.log(feed, stop.stop_id);
       return getUpcomingTrainsFor(feed, stop.stop_id)
     })).then(rv => {
-
-      let html = rv.map(stops => {
-        // console.log(stops,  'x');
-        return renderStops(stops)
-      }).join('');
-      // .then((rv) => renderStops(rv)))
-      // console.log('what?', stops);
-      response.end(html);
-      console.log(html);
+      try {
+        let html = rv.map(stops => {
+          // console.log(stops,  'x');
+          return renderStops(stops)
+        }).join('');
+        // .then((rv) => renderStops(rv)))
+        // console.log('what?', stops);
+        response.end(html);
+      } catch(ex) {
+        console.error('Error while making HTML',ex);
+      }
     });
   })
   .catch(err => {
-    console.log(err);
+    console.log('err', err);
   })
   // .finally(_ => {
   // });
